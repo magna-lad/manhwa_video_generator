@@ -62,7 +62,7 @@ def image_ocr(path):
                 'images': [img_b64]
             }],
              options={
-                'temperature': 0.1           # lower = more deterministic JSON
+                'temperature': 0.2           # lower = more deterministic JSON
             }
         )
         raw=response["message"]["content"]
