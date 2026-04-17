@@ -32,6 +32,14 @@ def image_ocr(path):
                         Very Very Important: Return ONLY the JSON object. No extra text. Keys must be exactly: page_type, mood_and_atmosphere,  visual_description, transcribed_text, narrator_hints.
                         Do not use markdown formatting outside of the JSON block. Do not hallucinate text or events that are not in the image.
 
+                            
+                            CRITICAL RULE FOR transcribed_text:
+                            - Read speech bubbles in this strict order:
+                              1. Top of page to bottom
+                              2. Right to left within the same horizontal band (manhwa convention)
+                              3. Never reorder based on speaker importance
+                            - Number each bubble sequentially as you encounter it
+                            - If uncertain about order, note it in narrator_hints
 
 
                             Analyze the image and adapt your extraction based on the PAGE TYPE:
