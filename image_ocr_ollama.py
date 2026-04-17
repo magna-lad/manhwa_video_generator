@@ -5,6 +5,17 @@ import os
 import re
 from tqdm import tqdm
 
+
+
+
+
+# CONFIG
+
+PROGRESS_DIR_NAME = "_ocr_progress"   # subfolder inside each chapter folder
+MASTER_OUTPUT_FILE = "all_chapters_merged.json"  # final merged output (saved in parent dir)
+
+
+
 def image_ocr(path):
     
     with open(path, "rb") as f:
