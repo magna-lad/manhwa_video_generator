@@ -110,6 +110,30 @@ def get_file_paths(folder_path):
 
 
 
+# PER-PAGE INCREMENTAL SAVE
+
+def get_progress_path(chapter_folder, filename):
+    """Returns the path where a single page's JSON is saved."""
+    progress_dir = os.path.join(chapter_folder, PROGRESS_DIR_NAME)
+    os.makedirs(progress_dir, exist_ok=True)
+    stem = os.path.splitext(filename)[0]
+    return os.path.join(progress_dir, f"{stem}.json")
+
+
+def save_page_json(chapter_folder, filename, data):
+    path = get_progress_path(chapter_folder, filename)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def load_page_json(chapter_folder, filename):
+    path = get_progress_path(chapter_folder, filename)
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
+
+
 if __name__ == "__main__":
     folder_path=r""
     data=get_file_paths(folder_path)
