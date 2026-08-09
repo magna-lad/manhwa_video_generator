@@ -245,7 +245,7 @@ def process_all_chapters(chapter_folders, master_output_dir=None):
 
 if __name__ == "__main__":
     #── Option A: Single chapter ──
-    single_folder = r"C:\Users\kound\OneDrive\Documents\College\yt\villain_to_kill_c000_c010\c001"
+    single_folder = r""
     process_chapter(single_folder)
     
 
