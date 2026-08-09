@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 PROGRESS_DIR_NAME = "_ocr_progress"   # subfolder inside each chapter folder
 MASTER_OUTPUT_FILE = "all_chapters_merged.json"  # final merged output (saved in parent dir)
+REGISTRY_FILENAME   = "character_registry.json"   #to maintain registry of a character -> to give them a particular voice
 
 
 
@@ -244,7 +245,7 @@ def process_all_chapters(chapter_folders, master_output_dir=None):
 
 if __name__ == "__main__":
     #── Option A: Single chapter ──
-    single_folder = r""
+    single_folder = r"C:\Users\kound\OneDrive\Documents\College\yt\villain_to_kill_c000_c010\c001"
     process_chapter(single_folder)
     
 
