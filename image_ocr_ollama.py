@@ -6,7 +6,10 @@ import re
 from tqdm import tqdm
 
 
+import torch
 
+print("CUDA available:", torch.cuda.is_available())
+print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None")
 
 
 # CONFIG
@@ -29,60 +32,67 @@ def image_ocr(path):
                 'role': 'user',
                 'content': 
                             """
-                            You are a Manhwa/Webtoon Analyst and Transcriber. Your job is to analyze panels from a manhwa chapter and extract maximum   textual and visual information. 
-                        Very Very Important: Return ONLY the JSON object. No extra text. Keys must be exactly: page_type, mood_and_atmosphere,  visual_description, transcribed_text, narrator_hints.
-                        Do not use markdown formatting outside of the JSON block. Do not hallucinate text or events that are not in the image.
+                            You are a Manhwa/Webtoon Analyst and Transcriber. Your job is to analyze panels from a manhwa chapter and extract maximum textual and visual information.
 
-                            
-                            CRITICAL RULE FOR transcribed_text:
-                            - Read speech bubbles in this strict order:
-                              1. Top of page to bottom
-                              2. Right to left within the same horizontal band (manhwa convention)
-                              3. Never reorder based on speaker importance
-                            - Number each bubble sequentially as you encounter it
-                            - If uncertain about order, note it in narrator_hints
+                            VERY IMPORTANT: Return ONLY the JSON object. No preamble, no markdown fences, no commentary. Keys must be exactly: page_type, mood_and_atmosphere, visual_description, transcribed_text, narrator_hints.
+                            Do not hallucinate text or events that are not visibly present in the image.
 
+                            READING ORDER (transcribed_text):
+                            Modern Korean manhwa/webtoons are formatted for LEFT-TO-RIGHT, top-to-bottom reading — the opposite of traditional right-to-left manga. Default to this order:
+                              1. Top of page to bottom.
+                              2. Left to right within the same horizontal band.
+                            If bubble tails, gutter flow, or panel layout suggest the page actually follows right-to-left convention instead (some scanlations or traditional-style manhwa do), transcribe in that order instead and say so explicitly in narrator_hints — do not silently switch conventions.
+                            Number each bubble sequentially in the order you transcribe it. If bubble order is genuinely ambiguous (e.g., two bubbles stacked with no clear vertical offset), note the ambiguity in narrator_hints rather than guessing silently.
 
-                            Analyze the image and adapt your extraction based on the PAGE TYPE:
+                            CHARACTER CONSISTENCY:
+                            When a speaker is not named on the page, describe them with a short, distinctive tag (e.g., "Red-Haired Man", "Scarred Woman"). Reuse the exact same tag for the same character every time they appear on this page — don't vary the phrasing mid-page, since downstream narration keys off this string for voice continuity.
 
-                            1. "EVERYTHING" (Standard Pages): 
-                               - Transcribe all speech bubbles, narration boxes, and thought bubbles.
+                            SOUND EFFECTS / STYLIZED TEXT:
+                            For SFX (e.g. 쿵, 휙), transcribe the original text and give a short bracketed sense-gloss, e.g. "쿵 [heavy thud]". Never invent an SFX that isn't visibly drawn on the page.
 
-                               - Identify who is speaking (if unknown, describe them via their distinct features: eg. "Red-Haired Man").
-                               - Describe character actions, facial expressions, and spatial positioning.
-                            2. "IMAGES_ONLY" (Action/Scenery, No Text):
-                               - Focus entirely on the choreography of the action, kinetic energy, or the beauty of the scenery.
+                            Adapt extraction depth based on page_type:
 
-                               - Describe character emotions, weapon movements, impact points, and camera angles (e.g., "low angle looking up at the        monster").
-                        3. "TEXT_ONLY" (Blank backgrounds with text):
-                               - Transcribe the text with 100% accuracy.
+                            1. "standard" (dialogue-driven pages):
+                               - Transcribe every speech bubble, narration box, and thought bubble.
+                               - Identify the speaker (name if known, else a consistent descriptive tag).
+                               - Describe character actions, facial expressions, and spatial positioning as they relate to who's speaking.
 
-                               - Note the background color and the visual styling of the text (e.g., "White text on a pitch-black background, jagged font   indicating screaming").
-                        4. "ARTISTIC_SPREAD" (Long vertical art piece / Epic reveals):
-                               - Read the image from TOP to BOTTOM.
+                            2. "images_only" (action/scenery, no legible text):
+                               - transcribed_text must be an empty array.
+                               - Focus on choreography, kinetic energy, weapon/impact points, camera angle (e.g., "low angle looking up at the monster"), and emotional beats conveyed purely visually.
 
-                               - Describe the scale, lighting, mood, and atmosphere. Focus heavily on the awe-inspiring or dramatic elements.
-                            REQUIRED JSON SCHEMA:
-                            Output in this manner:
+                            3. "text_only" (blank/minimal background, text-forward):
+                               - Transcribe with 100% accuracy — this is the highest-stakes field on this page type.
+                               - Note background color/texture and text styling (e.g., "white text on pitch-black background, jagged font indicating a scream").
+
+                            4. "artistic_spread" (full-page or multi-panel epic reveal, wide vertical art):
+                               - Read strictly top to bottom.
+                               - Emphasize scale, lighting, color palette, and the dramatic/awe intent of the composition. Note any text but keep the visual description primary.
+
+                            5. "photo_insert" (a real photograph or non-illustrated reference image embedded in the chapter, e.g. author's note, real-world reference photo):
+                               - Describe the photo's literal content plainly; do not treat it as part of the story's diegetic art unless context clearly indicates otherwise.
+                               - transcribed_text should capture any caption or overlaid text only.
+
+                            REQUIRED JSON SCHEMA (always return all five keys; transcribed_text is [] when there is no text on the page):
 
                             {
                               "page_type": "standard | images_only | text_only | artistic_spread | photo_insert",
-
-                              "mood_and_atmosphere": "Brief description of the lighting, colors, and emotional tone",
-                              "visual_description": "Detailed, chronological (top-to-bottom) description of what is happening visually. If artistic/    action, be highly descriptive.",
-                          "transcribed_text": [
+                              "mood_and_atmosphere": "Brief description of lighting, color palette, and emotional tone",
+                              "visual_description": "Detailed, chronological (top-to-bottom) description of what is happening visually",
+                              "transcribed_text": [
                                 {
                                   "type": "speech | thought | narration | sound_effect | floating_text",
-                                  "speaker_description": "Who is saying this? (or 'None' if narration/SFX)",
-                                  "text": "The exact transcribed text"
+                                  "speaker_description": "Who is saying this, or 'None' for narration/SFX",
+                                  "text": "The exact transcribed text, original + gloss for SFX"
                                 }
                               ],
-                              "narrator_hints": "Suggestions for the narrator AI (e.g., 'Long pause needed here', 'Fast-paced action scene', 'Ominous   reveal')"
+                              "narrator_hints": "Suggestions for the narrator AI (e.g. 'long pause here', 'fast-paced action scene', 'ominous reveal', or a note about reading-order ambiguity)"
+                            }
                         }""",
                 'images': [img_b64]
             }],
              options={
-                'temperature': 0.2           # lower = more deterministic JSON
+                'temperature': 0.1           # lower = more deterministic JSON
             }
         )
         raw=response["message"]["content"]

@@ -52,6 +52,7 @@ def synthesize_line(text, voice_id, speed):
 
 def build_silence(pause_ms):
     n_samples = int(SAMPLE_RATE * pause_ms / 1000)
+    noise = np.random.normal(0, 0.0005, n_samples).astype(np.float32)
     return np.zeros(n_samples, dtype=np.float32)
 
 
@@ -64,22 +65,49 @@ def get_audio_progress_path(chapter_folder, page_number):
 
 
 def synthesize_page_audio(page_script):
-    """Concatenates every voiced line's audio + its pause into one page-length waveform."""
+    """Concatenates grouped speaker lines and their pauses into one page-length waveform."""
     segments = []
+    # Group continuous text from the same voice_id/speaker
+    grouped_blocks = []
+    current_block = None
+
     for line in page_script.get("lines", []):
         if not line.get("include_in_audio", True):
             continue
         text = (line.get("text") or "").strip()
         if not text:
             continue
+            
+        voice_id = line["voice_id"]
+        speed = line["speed"]
+        pause = line.get("pause_after_ms", 300)
 
-        audio = synthesize_line(text, line["voice_id"], line["speed"])
+        # If it's the same voice and speed, append text (Kokoro will handle internal pauses natively)
+        if current_block and current_block["voice_id"] == voice_id and current_block["speed"] == speed:
+            # Join with a space or ellipsis so Kokoro knows it's a continuing thought
+            current_block["text"] += f" {text}" 
+            current_block["pause"] = pause # Carry over the final pause
+        else:
+            if current_block:
+                grouped_blocks.append(current_block)
+            current_block = {
+                "text": text,
+                "voice_id": voice_id,
+                "speed": speed,
+                "pause": pause
+            }
+            
+    if current_block:
+        grouped_blocks.append(current_block)
+
+    # Now synthesize the larger blocks
+    for block in grouped_blocks:
+        audio = synthesize_line(block["text"], block["voice_id"], block["speed"])
         if audio is None or len(audio) == 0:
-            tqdm.write(f"[WARN] No audio produced for line: {text[:60]!r}")
             continue
 
         segments.append(audio)
-        segments.append(build_silence(line.get("pause_after_ms", 300)))
+        segments.append(build_silence(block["pause"]))
 
     if not segments:
         return None
@@ -172,5 +200,6 @@ def process_chapter_full(chapter_folder):
 
 
 if __name__ == "__main__":
+    
     chapter_folder = r""
     process_chapter_full(chapter_folder)
